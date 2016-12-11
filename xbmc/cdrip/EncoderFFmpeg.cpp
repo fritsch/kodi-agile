@@ -106,15 +106,31 @@ bool CEncoderFFmpeg::Init(audioenc_callbacks &callbacks)
   }
 
   /* set the stream's parameters */
-  m_CodecCtx                 = m_Stream->codec;
-  m_CodecCtx->codec_id       = codec->id;
-  m_CodecCtx->codec_type     = AVMEDIA_TYPE_AUDIO;
-  m_CodecCtx->bit_rate       = m_Format->bit_rate;
-  m_CodecCtx->sample_rate    = m_iInSampleRate;
-  m_CodecCtx->channels       = m_iInChannels;
+  AVCodecParameters* codec_params = m_Stream->codecpar;
+  m_CodecCtx = avcodec_alloc_context3(codec);
+  if (!m_CodecCtx)
+  {
+    av_freep(&m_Format->pb);
+    av_freep(&m_Format);
+    return false;
+  }
+
+  if (avcodec_parameters_to_context(m_CodecCtx, codec_params) < 0)
+  {
+    av_freep(&m_Format->pb);
+    av_freep(&m_Format);
+    avcodec_free_context(&m_CodecCtx);
+    CLog::Log(LOGERROR, "CEncoderFFmpeg::Init - Failed with avcodec_parameters_to_context");
+    return false;
+  }
+  m_CodecCtx->codec_id = codec->id;
+  m_CodecCtx->codec_type = AVMEDIA_TYPE_AUDIO;
+  m_CodecCtx->bit_rate = m_Format->bit_rate;
+  m_CodecCtx->sample_rate = m_iInSampleRate;
+  m_CodecCtx->channels = m_iInChannels;
   m_CodecCtx->channel_layout = av_get_default_channel_layout(m_iInChannels);
-  m_CodecCtx->time_base.num  = 1;
-  m_CodecCtx->time_base.den  = m_iInSampleRate;
+  m_CodecCtx->time_base.num = 1;
+  m_CodecCtx->time_base.den = m_iInSampleRate;
   /* Allow experimental encoders (like FFmpeg builtin AAC encoder) */
   m_CodecCtx->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
 
@@ -130,6 +146,7 @@ bool CEncoderFFmpeg::Init(audioenc_callbacks &callbacks)
     case 16: m_InFormat = AV_SAMPLE_FMT_S16; break;
     case 32: m_InFormat = AV_SAMPLE_FMT_S32; break;
     default:
+      avcodec_free_context(&m_CodecCtx);
       av_freep(&m_Stream);
       av_freep(&m_Format->pb);
       av_freep(&m_Format);
@@ -144,6 +161,7 @@ bool CEncoderFFmpeg::Init(audioenc_callbacks &callbacks)
   if (m_OutFormat <= AV_SAMPLE_FMT_NONE || avcodec_open2(m_CodecCtx, codec, NULL))
   {
     CLog::Log(LOGERROR, "CEncoderFFmpeg::Init - Failed to open the codec %s", codec->long_name ? codec->long_name : codec->name);
+    avcodec_free_context(&m_CodecCtx);
     av_freep(&m_Stream);
     av_freep(&m_Format->pb);
     av_freep(&m_Format);
@@ -162,6 +180,7 @@ bool CEncoderFFmpeg::Init(audioenc_callbacks &callbacks)
     CLog::Log(LOGERROR, "CEncoderFFmpeg::Init - Failed to allocate necessary buffers");
     av_frame_free(&m_BufferFrame);
     av_freep(&m_Buffer);
+    avcodec_free_context(&m_CodecCtx);
     av_freep(&m_Stream);
     av_freep(&m_Format->pb);
     av_freep(&m_Format);
@@ -185,6 +204,7 @@ bool CEncoderFFmpeg::Init(audioenc_callbacks &callbacks)
       CLog::Log(LOGERROR, "CEncoderFFmpeg::Init - Failed to initialize the resampler");
       av_frame_free(&m_BufferFrame);
       av_freep(&m_Buffer);
+      avcodec_free_context(&m_CodecCtx);
       av_freep(&m_Stream);
       av_freep(&m_Format->pb);
       av_freep(&m_Format);
@@ -202,6 +222,7 @@ bool CEncoderFFmpeg::Init(audioenc_callbacks &callbacks)
       swr_free(&m_SwrCtx);
       av_frame_free(&m_BufferFrame);
       av_freep(&m_Buffer);
+      avcodec_free_context(&m_CodecCtx);
       av_freep(&m_Stream);
       av_freep(&m_Format->pb);
       av_freep(&m_Format);
@@ -230,6 +251,7 @@ bool CEncoderFFmpeg::Init(audioenc_callbacks &callbacks)
     swr_free(&m_SwrCtx);
     av_frame_free(&m_BufferFrame);
     av_freep(&m_Buffer);
+    avcodec_free_context(&m_CodecCtx);
     av_freep(&m_Stream);
     av_freep(&m_Format->pb);
     av_freep(&m_Format);
@@ -306,11 +328,27 @@ bool CEncoderFFmpeg::WriteFrame()
   }
   else frame = m_BufferFrame;
 
-  encoded = avcodec_encode_audio2(m_CodecCtx, &m_Pkt, frame, &got_output);
+  got_output = 0;
+
+  encoded = avcodec_send_frame(m_CodecCtx, frame);
+  if (encoded < 0)
+  {
+    CLog::Log(LOGERROR, "CEncoderFFmpeg::WriteFrame (send) - Error encoding audio: %i", encoded);
+    return false;
+  }
+
+  encoded = avcodec_receive_packet(m_CodecCtx, &m_Pkt);
+  if (encoded < 0)
+  {
+    CLog::Log(LOGERROR, "CEncoderFFmpeg::WriteFrame (receive) - Error encoding audio: %i", encoded);
+    return false;
+  }
+  got_output = 1;
 
   m_BufferSize = 0;
 
-  if (encoded < 0) {
+  if (encoded < 0)
+  {
     CLog::Log(LOGERROR, "CEncoderFFmpeg::WriteFrame - Error encoding audio: %i", encoded);
     return false;
   }
@@ -357,6 +395,8 @@ bool CEncoderFFmpeg::Close()
 
     /* cleanup */
     avcodec_close(m_CodecCtx);
+    // we allocate it ourselves
+    avcodec_free_context(&m_CodecCtx);
     av_freep(&m_Stream    );
     av_freep(&m_Format->pb);
     av_freep(&m_Format    );
