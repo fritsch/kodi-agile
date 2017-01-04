@@ -639,6 +639,8 @@ bool CDVDVideoCodecAndroidMediaCodec::Open(CDVDStreamInfo &hints, CDVDCodecOptio
   return m_opened;
 }
 
+
+
 void CDVDVideoCodecAndroidMediaCodec::Dispose()
 {
   if (!m_opened)
@@ -909,21 +911,6 @@ bool CDVDVideoCodecAndroidMediaCodec::ClearPicture(DVDVideoPicture* pDvdVideoPic
   return true;
 }
 
-void CDVDVideoCodecAndroidMediaCodec::SetDropState(bool bDrop)
-{
-  if (bDrop == m_drop)
-    return;
-
-  if (g_advancedSettings.CanLogComponent(LOGVIDEO))
-    CLog::Log(LOGDEBUG, "%s::%s %s->%s", "CDVDVideoCodecAndroidMediaCodec", __func__, m_drop ? "true" : "false", bDrop ? "true" : "false");
-
-  m_drop = bDrop;
-  if (m_drop)
-    m_videobuffer.iFlags |=  DVP_FLAG_DROPPED;
-  else
-    m_videobuffer.iFlags &= ~DVP_FLAG_DROPPED;
-}
-
 void CDVDVideoCodecAndroidMediaCodec::SetCodecControl(int flags)
 {
   if (m_codecControlFlags != flags)
@@ -932,18 +919,6 @@ void CDVDVideoCodecAndroidMediaCodec::SetCodecControl(int flags)
       CLog::Log(LOGDEBUG, "%s::%s %x->%x", "CDVDVideoCodecAndroidMediaCodec", __func__, m_codecControlFlags, flags);
     m_codecControlFlags = flags;
   }
-}
-
-int CDVDVideoCodecAndroidMediaCodec::GetDataSize(void)
-{
-  // just ignore internal buffering contribution.
-  return 0;
-}
-
-double CDVDVideoCodecAndroidMediaCodec::GetTimeSize(void)
-{
-  // just ignore internal buffering contribution.
-  return 0.0;
 }
 
 unsigned CDVDVideoCodecAndroidMediaCodec::GetAllowedReferences()

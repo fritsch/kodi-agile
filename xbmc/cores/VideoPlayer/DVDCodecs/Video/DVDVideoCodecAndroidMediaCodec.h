@@ -101,17 +101,19 @@ public:
   // track instances - we can only allow exactly one
   static int s_instances;
   // required overrides
-  virtual bool    Open(CDVDStreamInfo &hints, CDVDCodecOptions &options);
-  virtual int     Decode(uint8_t *pData, int iSize, double dts, double pts);
-  virtual void    Reset();
-  virtual bool    GetPicture(DVDVideoPicture *pDvdVideoPicture);
-  virtual bool    ClearPicture(DVDVideoPicture* pDvdVideoPicture);
-  virtual void    SetDropState(bool bDrop);
-  virtual void    SetCodecControl(int flags);
-  virtual int     GetDataSize(void);
-  virtual double  GetTimeSize(void);
+  virtual bool Open(CDVDStreamInfo &hints, CDVDCodecOptions &options) override;
+  virtual bool Reconfigure(CDVDStreamInfo &hints) override;
+  virtual int AddData(uint8_t* pData, int iSize, double dts, double pts) override;
+  virtual int Decode(uint8_t *pData, int iSize, double dts, double pts) override;
+  virtual void Reset() override;
+  virtual bool GetPicture(DVDVideoPicture *pDvdVideoPicture) override;
+  virtual bool ClearPicture(DVDVideoPicture* pDvdVideoPicture) override;
+  virtual void SetSpeed(int iSpeed) override;
+  virtual void SetCodecControl(int flags) override;
   virtual const char* GetName(void) { return m_formatname.c_str(); }
-  virtual unsigned GetAllowedReferences();
+  virtual unsigned GetAllowedReferences() override;
+  virtual bool GetCodecStats(double &pts, int &droppedFrames, int &skippedPics) override;
+  virtual void Reopen() override;
 
 protected:
   void            Dispose();
