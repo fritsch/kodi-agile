@@ -1,4 +1,4 @@
-if (X11_FOUND)
+if (ENABLE_X11)
 
   set(SOURCES GLContextEGL.cpp
               GLContextGLX.cpp
